@@ -1,0 +1,9 @@
+{
+  "name": "daily-habit-tracker",
+  "version": "1.0.0",
+  "description": "Full-featured Daily Habit Tracker with Pomodoro Timer, 28-Day Heatmap, PWA, and Node.js API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
