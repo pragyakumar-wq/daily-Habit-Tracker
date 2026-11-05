@@ -24,7 +24,7 @@
     <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
       <div class="flex items-center gap-2">
         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
-          🚀 Step 11: Drag-and-Drop &amp; CSV Export
+          🌅 Step 12: Time-of-Day Routines &amp; Weekly Review
         </span>
         <span id="current-date" class="text-xs font-medium text-slate-500 dark:text-slate-400"></span>
       </div>
@@ -143,7 +143,7 @@
             maxlength="60"
             class="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
-          <div class="flex gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <div class="flex items-center rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5">
               <span class="text-[11px] font-semibold text-slate-400 mr-1">Goal:</span>
               <input
@@ -159,16 +159,26 @@
             <select
               id="habit-category"
               aria-label="Habit category"
-              class="px-3 py-2.5 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              class="px-2.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="Health">💪 Health</option>
               <option value="Mind">🧠 Mind</option>
               <option value="Work">💻 Work</option>
               <option value="Life">🌱 Life</option>
             </select>
+            <select
+              id="habit-time"
+              aria-label="Time of day"
+              class="px-2.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="Morning">🌅 Morning</option>
+              <option value="Afternoon">☀️ Afternoon</option>
+              <option value="Evening">🌙 Evening</option>
+              <option value="Anytime">🔄 Anytime</option>
+            </select>
             <button
               type="submit"
-              class="accent-bg px-4 py-2.5 text-white text-sm font-semibold rounded-xl transition-colors shrink-0"
+              class="accent-bg px-4 py-2.5 text-white text-sm font-semibold rounded-xl transition-colors shrink-0 ml-auto sm:ml-0"
             >
               + Add
             </button>
@@ -197,9 +207,18 @@
             <option value="streak-desc">🔥 Sort: Highest Streak</option>
             <option value="incomplete-first">⏳ Sort: Pending First</option>
             <option value="alpha">🔤 Sort: Name (A–Z)</option>
+            <option value="time-of-day">🌅 Sort: Time of Day</option>
           </select>
         </div>
 
+                <!-- Time-of-Day Routine Filter Pills -->
+        <div id="time-filters" class="flex flex-wrap items-center gap-1.5 mb-2.5">
+          <button type="button" data-time="All" class="time-tab px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors">All Times</button>
+          <button type="button" data-time="Morning" class="time-tab px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors">🌅 Morning</button>
+          <button type="button" data-time="Afternoon" class="time-tab px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors">☀️ Afternoon</button>
+          <button type="button" data-time="Evening" class="time-tab px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors">🌙 Evening</button>
+          <button type="button" data-time="Anytime" class="time-tab px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors">🔄 Anytime</button>
+        </div>
         <div id="category-filters" class="flex flex-wrap items-center gap-1.5 pb-3 mb-4 border-b border-slate-100 dark:border-slate-800">
           <button type="button" data-category="All" class="filter-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors">All</button>
           <button type="button" data-category="Health" class="filter-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors">💪 Health</button>
@@ -310,6 +329,38 @@
                 <span>100%</span>
               </div>
             </div>
+          </div>
+
+          <!-- Step 12: Automated Weekly Review & Shareable Report -->
+          <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-800 space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+                  📋 Automated Weekly Review &amp; Insights
+                </span>
+                <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Auto-identifies your strongest habit and next week's focus area.</p>
+              </div>
+              <button
+                id="copy-report-btn"
+                type="button"
+                class="accent-bg px-3 py-1.5 rounded-xl text-xs font-semibold text-white transition-opacity hover:opacity-90 shrink-0"
+              >
+                📋 Copy Weekly Report
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div class="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/70">
+                <div class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">🏆 Most Consistent (7d)</div>
+                <div id="review-top-habit" class="text-xs font-bold text-slate-800 dark:text-slate-100 mt-1 break-words">—</div>
+              </div>
+              <div class="p-3 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/70">
+                <div class="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">🎯 Needs Focus Next Week</div>
+                <div id="review-focus-habit" class="text-xs font-bold text-slate-800 dark:text-slate-100 mt-1 break-words">—</div>
+              </div>
+            </div>
+
+            <pre id="weekly-report-preview" class="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-mono text-slate-600 dark:text-slate-300 whitespace-pre-wrap overflow-x-auto leading-relaxed"></pre>
           </div>
         </div>
       </section>

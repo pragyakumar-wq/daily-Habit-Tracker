@@ -1,5 +1,12 @@
 // 1. STATE & CONSTANTS
-const STORAGE_KEY = 'beginner_habit_tracker_v11';
+const STORAGE_KEY = 'beginner_habit_tracker_v12';
+
+const TIME_SLOTS = {
+  Morning: { label: '🌅 Morning', order: 1, badge: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800' },
+  Afternoon: { label: '☀️ Afternoon', order: 2, badge: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800' },
+  Evening: { label: '🌙 Evening', order: 3, badge: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800' },
+  Anytime: { label: '🔄 Anytime', order: 4, badge: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' }
+};
 const THEME_KEY = 'beginner_habit_tracker_theme';
 const SOUND_KEY = 'beginner_habit_tracker_sound';
 const ACCENT_KEY = 'beginner_habit_tracker_accent';
@@ -58,6 +65,7 @@ const DEFAULT_HABITS = [
     id: 1,
     name: '💧 Drink 8 glasses of water',
     category: 'Health',
+    timeOfDay: 'Anytime',
     target: 8,
     count: 5,
     completed: false,
@@ -74,6 +82,7 @@ const DEFAULT_HABITS = [
     id: 2,
     name: '📖 Read for 15 minutes',
     category: 'Mind',
+    timeOfDay: 'Evening',
     target: 1,
     count: 1,
     completed: true,
@@ -90,6 +99,7 @@ const DEFAULT_HABITS = [
     id: 3,
     name: '💻 Code 2 Pomodoro sessions in VS Code',
     category: 'Work',
+    timeOfDay: 'Morning',
     target: 2,
     count: 1,
     completed: false,
@@ -110,6 +120,7 @@ let dayOffset = 0;
 let freezeShields = 2;
 let activeView = 'habits';
 let activeCategory = 'All';
+let activeTimeSlot = 'All';
 let searchQuery = '';
 let sortBy = 'default';
 let editingHabitId = null;
@@ -159,6 +170,12 @@ const addHabitForm = document.getElementById('add-habit-form');
 const habitInput = document.getElementById('habit-input');
 const habitTargetInput = document.getElementById('habit-target');
 const habitCategorySelect = document.getElementById('habit-category');
+const habitTimeSelect = document.getElementById('habit-time');
+const timeFiltersEl = document.getElementById('time-filters');
+const reviewTopHabitEl = document.getElementById('review-top-habit');
+const reviewFocusHabitEl = document.getElementById('review-focus-habit');
+const weeklyReportPreviewEl = document.getElementById('weekly-report-preview');
+const copyReportBtn = document.getElementById('copy-report-btn');
 const inputFeedback = document.getElementById('input-feedback');
 const categoryFiltersEl = document.getElementById('category-filters');
 const searchInputEl = document.getElementById('search-input');
@@ -315,6 +332,7 @@ function normalizeHabit(h) {
     id: Number(h.id) || Date.now(),
     name: String(h.name || 'Untitled Habit'),
     category: CATEGORY_STYLES[h.category] ? h.category : 'Health',
+    timeOfDay: TIME_SLOTS[h.timeOfDay] ? h.timeOfDay : 'Anytime',
     target,
     count: isNowCompleted ? target : count,
     completed: isNowCompleted,
@@ -340,8 +358,8 @@ function loadFromStorage() {
     }
     const raw =
       localStorage.getItem(STORAGE_KEY) ||
-      localStorage.getItem('beginner_habit_tracker_v10') ||
-      localStorage.getItem('beginner_habit_tracker_v9');
+      localStorage.getItem('beginner_habit_tracker_v11') ||
+      localStorage.getItem('beginner_habit_tracker_v10');
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed.habits)) {
@@ -741,12 +759,14 @@ function getVisibleHabits() {
   const query = searchQuery.trim().toLowerCase();
   const filtered = habits.filter((h) => {
     const matchesCategory = activeCategory === 'All' || h.category === activeCategory;
+    const matchesTime = activeTimeSlot === 'All' || h.timeOfDay === activeTimeSlot;
     const matchesSearch =
       !query ||
       h.name.toLowerCase().includes(query) ||
       h.category.toLowerCase().includes(query) ||
+      (h.timeOfDay && h.timeOfDay.toLowerCase().includes(query)) ||
       (h.note && h.note.toLowerCase().includes(query));
-    return matchesCategory && matchesSearch;
+    return matchesCategory && matchesTime && matchesSearch;
   });
 
   const sorted = [...filtered];
@@ -756,11 +776,77 @@ function getVisibleHabits() {
     sorted.sort((a, b) => Number(a.completed) - Number(b.completed));
   } else if (sortBy === 'alpha') {
     sorted.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sortBy === 'time-of-day') {
+    sorted.sort((a, b) => {
+      const orderA = (TIME_SLOTS[a.timeOfDay] || TIME_SLOTS.Anytime).order;
+      const orderB = (TIME_SLOTS[b.timeOfDay] || TIME_SLOTS.Anytime).order;
+      return orderA - orderB;
+    });
   }
   return sorted;
 }
 
 // 8. RENDER FUNCTIONS
+function renderTimeTabs() {
+  if (!timeFiltersEl) return;
+  const buttons = timeFiltersEl.querySelectorAll('.time-tab');
+  buttons.forEach((btn) => {
+    const slot = btn.dataset.time;
+    const count = slot === 'All'
+      ? habits.length
+      : habits.filter(h => h.timeOfDay === slot).length;
+    const base = slot === 'All' ? 'All Times' : TIME_SLOTS[slot].label;
+    btn.textContent = `${base} (${count})`;
+    if (slot === activeTimeSlot) {
+      btn.className = 'time-tab accent-bg px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white shadow-xs transition-colors';
+    } else {
+      btn.className = 'time-tab px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors';
+    }
+  });
+}
+
+function buildWeeklyReportText() {
+  if (habits.length === 0) {
+    reviewTopHabitEl.textContent = 'Add a habit to see insights';
+    reviewFocusHabitEl.textContent = 'Add a habit to see insights';
+    weeklyReportPreviewEl.textContent = 'No habits tracked yet.';
+    return 'No habits tracked yet.';
+  }
+
+  const scored = habits.map((h) => {
+    const done7d = h.history.filter(v => v === true).length + (h.completed ? 1 : 0);
+    const pct = Math.round((done7d / 7) * 100);
+    return { habit: h, done7d, pct, streak: computeStreak(h) };
+  });
+
+  const sortedByRate = [...scored].sort((a, b) => b.pct - a.pct || b.streak - a.streak);
+  const top = sortedByRate[0];
+  const focus = sortedByRate[sortedByRate.length - 1];
+
+  reviewTopHabitEl.textContent = `${top.habit.name} (${top.pct}% • 🔥 ${top.streak}d)`;
+  reviewFocusHabitEl.textContent = `${focus.habit.name} (${focus.pct}% • ${focus.done7d}/7 days)`;
+
+  const totalPossible = habits.length * 7;
+  const totalDone = scored.reduce((s, item) => s + item.done7d, 0);
+  const overallRate = Math.round((totalDone / totalPossible) * 100);
+  const totalXP = computeTotalXP(habits);
+  const level = Math.floor(totalXP / 200) + 1;
+
+  const lines = [
+    `📊 WEEKLY HABIT REVIEW (${dateEl.textContent})`,
+    `• Overall 7-Day Consistency: ${overallRate}% (${totalDone}/${totalPossible} check-ins)`,
+    `• Current Level: Lv. ${level} (${totalXP} XP) | Shields: 🧊 ${freezeShields}/3`,
+    `• Top Habit: ${top.habit.name} (${top.pct}%)`,
+    `• Focus for Next Week: ${focus.habit.name} (${focus.pct}%)`,
+    ``,
+    `HABIT BREAKDOWN (LAST 7 DAYS):`,
+    ...scored.map(s => `- ${s.habit.name} [${s.habit.timeOfDay}]: ${s.done7d}/7 days (${s.pct}%) | 🔥 ${s.streak}d streak`)
+  ];
+  const report = lines.join('\n');
+  weeklyReportPreviewEl.textContent = report;
+  return report;
+}
+
 function renderCategoryTabs() {
   const buttons = categoryFiltersEl.querySelectorAll('.filter-tab');
   buttons.forEach((btn) => {
@@ -895,10 +981,12 @@ function renderAnalytics(dayLabels) {
   });
 
   renderMonthlyHeatmap();
+  buildWeeklyReportText();
 }
 
 function renderHabits() {
   updateDateDisplay();
+  renderTimeTabs();
   renderCategoryTabs();
   renderTimerUI();
   habitListEl.innerHTML = '';
@@ -1066,6 +1154,12 @@ function renderHabits() {
     catBadge.className = `px-2 py-0.5 text-[11px] font-semibold rounded-md border ${catClass}`;
     catBadge.textContent = habit.category;
     metaLeft.appendChild(catBadge);
+
+    const timeInfo = TIME_SLOTS[habit.timeOfDay] || TIME_SLOTS.Anytime;
+    const timeBadge = document.createElement('span');
+    timeBadge.className = `px-2 py-0.5 text-[11px] font-semibold rounded-md border ${timeInfo.badge}`;
+    timeBadge.textContent = timeInfo.label;
+    metaLeft.appendChild(timeBadge);
 
     if (habit.target > 1) {
       const stepper = document.createElement('div');
@@ -1634,12 +1728,14 @@ addHabitForm.addEventListener('submit', (event) => {
 
   inputFeedback.classList.add('hidden');
   const selectedCategory = habitCategorySelect.value;
+  const selectedTime = habitTimeSelect ? habitTimeSelect.value : 'Anytime';
   const targetVal = Math.max(1, Math.min(50, Number(habitTargetInput.value) || 1));
 
   const newHabit = normalizeHabit({
     id: nextId++,
     name: text,
     category: selectedCategory,
+    timeOfDay: selectedTime,
     target: targetVal,
     count: 0,
     completed: false,
@@ -1890,3 +1986,45 @@ installAppBtn.addEventListener('click', async () => {
 
 closeInstallModalBtn.addEventListener('click', closeInstallModal);
 gotItInstallBtn.addEventListener('click', closeInstallModal);
+
+
+if (timeFiltersEl) {
+  timeFiltersEl.addEventListener('click', (event) => {
+    const btn = event.target.closest('.time-tab');
+    if (!btn) return;
+    activeTimeSlot = btn.dataset.time;
+    renderHabits();
+  });
+}
+
+if (copyReportBtn) {
+  copyReportBtn.addEventListener('click', () => {
+    const reportText = buildWeeklyReportText();
+    const onCopied = () => {
+      copyReportBtn.textContent = '✓ Copied Report!';
+      saveToStorage('✓ Copied Weekly Report');
+      setTimeout(() => {
+        copyReportBtn.textContent = '📋 Copy Weekly Report';
+      }, 2000);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(reportText).then(onCopied).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = reportText;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        onCopied();
+      });
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = reportText;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      onCopied();
+    }
+  });
+}
