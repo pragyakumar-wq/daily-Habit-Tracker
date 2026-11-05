@@ -1,3 +1,13 @@
+// ============================================================================
+// 🔥 OPTIONAL: Hardcode your Firebase Config here before pushing to GitHub,
+// OR simply paste it inside the app under "⚙️ Tools -> 🔥 Firebase Cloud Sync"!
+// ============================================================================
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: '',
+  projectId: ''
+};
+const FIREBASE_CONFIG_STORAGE_KEY = 'beginner_habit_tracker_firebase_cfg';
+
 // 1. STATE & CONSTANTS
 const STORAGE_KEY = 'beginner_habit_tracker_v14';
 
@@ -415,6 +425,14 @@ function saveToStorage(message = '✓ Saved') {
     // Ignore storage errors
   }
   saveStatusEl.textContent = message;
+
+  // Auto-sync to Firebase Firestore if connected (debounced 600ms)
+  if (typeof firebaseCreds !== 'undefined' && firebaseCreds.apiKey && firebaseCreds.projectId && message !== '☁️ Pulled from Firebase') {
+    if (firebaseSyncTimer) clearTimeout(firebaseSyncTimer);
+    firebaseSyncTimer = setTimeout(() => {
+      pushStateToFirebase(true);
+    }, 600);
+  }
 }
 
 function applyTheme() {
@@ -2281,3 +2299,277 @@ if (emojiPickerBarEl) {
     playStepSound();
   });
 }
+
+
+// 12. FIREBASE CLOUD FIRESTORE SYNC ENGINE (REST API — Zero external SDK issues)
+const firebaseTopBtn = document.getElementById('firebase-top-btn');
+const firebaseStatusBadgeEl = document.getElementById('firebase-status-badge');
+const firebaseSyncIdInput = document.getElementById('firebase-sync-id');
+const firebaseProjectIdDisplay = document.getElementById('firebase-project-id-display');
+const firebaseConfigInput = document.getElementById('firebase-config-input');
+const firebaseFeedbackMsgEl = document.getElementById('firebase-feedback-msg');
+const connectFirebaseBtn = document.getElementById('connect-firebase-btn');
+const cloudPushBtn = document.getElementById('cloud-push-btn');
+const cloudPullBtn = document.getElementById('cloud-pull-btn');
+const disconnectFirebaseBtn = document.getElementById('disconnect-firebase-btn');
+
+let firebaseCreds = {
+  apiKey: DEFAULT_FIREBASE_CONFIG.apiKey || '',
+  projectId: DEFAULT_FIREBASE_CONFIG.projectId || '',
+  syncId: 'my-habit-tracker-01',
+  rawText: ''
+};
+let firebaseSyncTimer = null;
+
+function parseFirebaseConfigSnippet(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  // Supports pasting either full JS snippet `const firebaseConfig = { apiKey: "...", projectId: "..." }` or JSON
+  const apiKeyMatch = text.match(/apiKey\s*:\s*["']([^"']+)["']/) || text.match(/"apiKey"\s*:\s*"([^"]+)"/);
+  const projectIdMatch = text.match(/projectId\s*:\s*["']([^"']+)["']/) || text.match(/"projectId"\s*:\s*"([^"]+)"/);
+  if (apiKeyMatch && projectIdMatch) {
+    return {
+      apiKey: apiKeyMatch[1].trim(),
+      projectId: projectIdMatch[1].trim()
+    };
+  }
+  return null;
+}
+
+function showFirebaseFeedback(msg, isError = false) {
+  if (!firebaseFeedbackMsgEl) return;
+  firebaseFeedbackMsgEl.textContent = msg;
+  firebaseFeedbackMsgEl.className = `text-xs font-medium ${
+    isError ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'
+  }`;
+  firebaseFeedbackMsgEl.classList.remove('hidden');
+}
+
+function updateFirebaseUI() {
+  if (!firebaseStatusBadgeEl) return;
+  const isConfigured = Boolean(firebaseCreds.apiKey && firebaseCreds.projectId);
+  if (firebaseSyncIdInput) {
+    firebaseSyncIdInput.value = firebaseCreds.syncId || 'my-habit-tracker-01';
+  }
+  if (firebaseProjectIdDisplay) {
+    firebaseProjectIdDisplay.value = isConfigured
+      ? `${firebaseCreds.projectId} (Ready)`
+      : 'None — paste config below';
+  }
+  if (firebaseConfigInput && firebaseCreds.rawText && !firebaseConfigInput.value) {
+    firebaseConfigInput.value = firebaseCreds.rawText;
+  }
+
+  if (isConfigured) {
+    firebaseStatusBadgeEl.textContent = `🟢 Connected: ${firebaseCreds.projectId}`;
+    firebaseStatusBadgeEl.className = 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300';
+    if (firebaseTopBtn) {
+      firebaseTopBtn.textContent = '☁️ Synced';
+      firebaseTopBtn.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors';
+    }
+  } else {
+    firebaseStatusBadgeEl.textContent = '⚪ Not Connected';
+    firebaseStatusBadgeEl.className = 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300';
+    if (firebaseTopBtn) {
+      firebaseTopBtn.textContent = '🔥 Firebase';
+      firebaseTopBtn.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-colors';
+    }
+  }
+}
+
+function loadFirebaseCreds() {
+  try {
+    const raw = localStorage.getItem(FIREBASE_CONFIG_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.apiKey && parsed.projectId) {
+        firebaseCreds = {
+          apiKey: parsed.apiKey,
+          projectId: parsed.projectId,
+          syncId: parsed.syncId || 'my-habit-tracker-01',
+          rawText: parsed.rawText || ''
+        };
+      }
+    }
+  } catch (err) {
+    // Ignore storage errors
+  }
+  updateFirebaseUI();
+}
+
+function saveFirebaseCreds() {
+  try {
+    localStorage.setItem(FIREBASE_CONFIG_STORAGE_KEY, JSON.stringify(firebaseCreds));
+  } catch (err) {
+    // Ignore storage errors
+  }
+  updateFirebaseUI();
+}
+
+function getFirestoreDocUrl() {
+  const cleanSyncId = encodeURIComponent((firebaseCreds.syncId || 'my-habit-tracker-01').trim());
+  const cleanProject = encodeURIComponent(firebaseCreds.projectId.trim());
+  const cleanKey = encodeURIComponent(firebaseCreds.apiKey.trim());
+  return `https://firestore.googleapis.com/v1/projects/${cleanProject}/databases/(default)/documents/habit_trackers/${cleanSyncId}?key=${cleanKey}`;
+}
+
+async function pushStateToFirebase(silent = false) {
+  if (!firebaseCreds.apiKey || !firebaseCreds.projectId) {
+    if (!silent) {
+      showFirebaseFeedback('Please paste your firebaseConfig and click Save & Connect first.', true);
+    }
+    return;
+  }
+
+  try {
+    const statePayload = JSON.stringify({
+      habits,
+      nextId,
+      dayOffset,
+      freezeShields,
+      todayMood,
+      moodHistory,
+      updatedAt: new Date().toISOString()
+    });
+
+    const res = await fetch(getFirestoreDocUrl(), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: {
+          payload: { stringValue: statePayload },
+          updatedAt: { stringValue: new Date().toISOString() }
+        }
+      })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      const errMsg = (errData.error && errData.error.message) || `HTTP ${res.status}`;
+      showFirebaseFeedback(`Firestore error: ${errMsg}. Make sure Cloud Firestore is enabled in Test Mode!`, true);
+      return;
+    }
+
+    saveStatusEl.textContent = '☁️ Synced to Firebase';
+    if (!silent) {
+      showFirebaseFeedback(`✓ Successfully pushed ${habits.length} habits to Firestore (ID: "${firebaseCreds.syncId}")!`);
+    }
+  } catch (err) {
+    if (!silent) {
+      showFirebaseFeedback('Network error connecting to Firebase Firestore. Check your internet or projectId.', true);
+    }
+  }
+}
+
+async function pullStateFromFirebase(silent = false) {
+  if (!firebaseCreds.apiKey || !firebaseCreds.projectId) {
+    if (!silent) {
+      showFirebaseFeedback('Please paste your firebaseConfig and click Save & Connect first.', true);
+    }
+    return;
+  }
+
+  try {
+    const res = await fetch(getFirestoreDocUrl(), { method: 'GET' });
+    if (res.status === 404) {
+      if (!silent) {
+        showFirebaseFeedback(`No cloud backup found yet for Sync ID "${firebaseCreds.syncId}". Pushing your current habits now...`);
+      }
+      await pushStateToFirebase(silent);
+      return;
+    }
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      const errMsg = (errData.error && errData.error.message) || `HTTP ${res.status}`;
+      showFirebaseFeedback(`Firestore error: ${errMsg}. Check Firestore Rules (allow read, write: if true;).`, true);
+      return;
+    }
+
+    const doc = await res.json();
+    const rawPayload = doc.fields && doc.fields.payload && doc.fields.payload.stringValue;
+    if (rawPayload) {
+      const parsed = JSON.parse(rawPayload);
+      if (Array.isArray(parsed.habits)) {
+        habits = parsed.habits.map(normalizeHabit);
+        nextId = parsed.nextId || (habits.reduce((max, h) => Math.max(max, h.id), 0) + 1);
+        dayOffset = parsed.dayOffset || 0;
+        freezeShields = typeof parsed.freezeShields === 'number' ? parsed.freezeShields : 2;
+        todayMood = MOOD_META[parsed.todayMood] ? parsed.todayMood : 'good';
+        moodHistory = Array.isArray(parsed.moodHistory) && parsed.moodHistory.length === 6 ? parsed.moodHistory : moodHistory;
+        saveToStorage('☁️ Pulled from Firebase');
+        renderHabits();
+        if (!silent) {
+          showFirebaseFeedback(`✓ Loaded ${habits.length} habits from Firebase Cloud (ID: "${firebaseCreds.syncId}")!`);
+        }
+      }
+    }
+  } catch (err) {
+    if (!silent) {
+      showFirebaseFeedback('Could not reach Firebase Firestore. Check your configuration.', true);
+    }
+  }
+}
+
+if (firebaseTopBtn) {
+  firebaseTopBtn.addEventListener('click', () => {
+    switchView('settings');
+    const card = document.getElementById('firebase-sync-card');
+    if (card) card.scrollIntoView({ behavior: 'smooth' });
+  });
+}
+
+if (connectFirebaseBtn) {
+  connectFirebaseBtn.addEventListener('click', async () => {
+    const raw = firebaseConfigInput.value;
+    const syncIdVal = (firebaseSyncIdInput.value || 'my-habit-tracker-01').trim();
+    const extracted = parseFirebaseConfigSnippet(raw);
+    if (!extracted) {
+      showFirebaseFeedback('Could not find apiKey and projectId in the pasted text. Paste the firebaseConfig object from Firebase Console.', true);
+      return;
+    }
+    firebaseCreds = {
+      apiKey: extracted.apiKey,
+      projectId: extracted.projectId,
+      syncId: syncIdVal,
+      rawText: raw.trim()
+    };
+    saveFirebaseCreds();
+    showFirebaseFeedback(`✓ Connected to Firebase project "${extracted.projectId}"! Syncing now...`);
+    await pushStateToFirebase(false);
+  });
+}
+
+if (cloudPushBtn) {
+  cloudPushBtn.addEventListener('click', () => {
+    if (firebaseSyncIdInput && firebaseSyncIdInput.value.trim()) {
+      firebaseCreds.syncId = firebaseSyncIdInput.value.trim();
+      saveFirebaseCreds();
+    }
+    pushStateToFirebase(false);
+  });
+}
+
+if (cloudPullBtn) {
+  cloudPullBtn.addEventListener('click', () => {
+    if (firebaseSyncIdInput && firebaseSyncIdInput.value.trim()) {
+      firebaseCreds.syncId = firebaseSyncIdInput.value.trim();
+      saveFirebaseCreds();
+    }
+    pullStateFromFirebase(false);
+  });
+}
+
+if (disconnectFirebaseBtn) {
+  disconnectFirebaseBtn.addEventListener('click', () => {
+    firebaseCreds = { apiKey: '', projectId: '', syncId: 'my-habit-tracker-01', rawText: '' };
+    if (firebaseConfigInput) firebaseConfigInput.value = '';
+    try {
+      localStorage.removeItem(FIREBASE_CONFIG_STORAGE_KEY);
+    } catch (err) {}
+    updateFirebaseUI();
+    showFirebaseFeedback('Disconnected from Firebase. Local storage remains active.');
+  });
+}
+
+loadFirebaseCreds();
