@@ -1,5 +1,5 @@
 // 1. STATE & CONSTANTS
-const STORAGE_KEY = 'beginner_habit_tracker_v12';
+const STORAGE_KEY = 'beginner_habit_tracker_v13';
 
 const TIME_SLOTS = {
   Morning: { label: '🌅 Morning', order: 1, badge: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800' },
@@ -176,6 +176,12 @@ const reviewTopHabitEl = document.getElementById('review-top-habit');
 const reviewFocusHabitEl = document.getElementById('review-focus-habit');
 const weeklyReportPreviewEl = document.getElementById('weekly-report-preview');
 const copyReportBtn = document.getElementById('copy-report-btn');
+const confettiCanvasEl = document.getElementById('confetti-canvas');
+const testConfettiBtn = document.getElementById('test-confetti-btn');
+const archivedCountEl = document.getElementById('archived-count');
+const archivedHabitsListEl = document.getElementById('archived-habits-list');
+const archivedEmptyMsgEl = document.getElementById('archived-empty-msg');
+let confettiAnimId = null;
 const inputFeedback = document.getElementById('input-feedback');
 const categoryFiltersEl = document.getElementById('category-filters');
 const searchInputEl = document.getElementById('search-input');
@@ -337,6 +343,7 @@ function normalizeHabit(h) {
     count: isNowCompleted ? target : count,
     completed: isNowCompleted,
     note: typeof h.note === 'string' ? h.note : '',
+    archived: Boolean(h.archived),
     history: history6,
     monthHistory: monthHistory27
   };
@@ -358,8 +365,8 @@ function loadFromStorage() {
     }
     const raw =
       localStorage.getItem(STORAGE_KEY) ||
-      localStorage.getItem('beginner_habit_tracker_v11') ||
-      localStorage.getItem('beginner_habit_tracker_v10');
+      localStorage.getItem('beginner_habit_tracker_v12') ||
+      localStorage.getItem('beginner_habit_tracker_v11');
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed.habits)) {
@@ -434,6 +441,115 @@ function applySoundSetting() {
   } catch (err) {
     // Ignore storage errors
   }
+}
+
+
+// HTML5 <canvas> Physics Confetti Particle Engine
+function launchConfetti() {
+  if (!confettiCanvasEl) return;
+  if (confettiAnimId !== null) {
+    cancelAnimationFrame(confettiAnimId);
+    confettiAnimId = null;
+  }
+
+  const ctx = confettiCanvasEl.getContext('2d');
+  confettiCanvasEl.width = window.innerWidth;
+  confettiCanvasEl.height = window.innerHeight;
+
+  const colors = ['#4f46e5', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#8b5cf6'];
+  const particles = Array.from({ length: 75 }, () => ({
+    x: confettiCanvasEl.width * (0.2 + Math.random() * 0.6),
+    y: confettiCanvasEl.height * 0.25,
+    vx: (Math.random() - 0.5) * 11,
+    vy: -(Math.random() * 9 + 4),
+    size: Math.random() * 6 + 5,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    rotation: Math.random() * Math.PI * 2,
+    vRot: (Math.random() - 0.5) * 0.22,
+    alpha: 1
+  }));
+
+  function stepFrame() {
+    ctx.clearRect(0, 0, confettiCanvasEl.width, confettiCanvasEl.height);
+    let alive = 0;
+
+    particles.forEach((p) => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.28; // Gravity
+      p.vx *= 0.99; // Air resistance
+      p.rotation += p.vRot;
+      p.alpha -= 0.011;
+
+      if (p.alpha > 0 && p.y < confettiCanvasEl.height + 20) {
+        alive += 1;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.alpha);
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rotation);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.65);
+        ctx.restore();
+      }
+    });
+
+    if (alive > 0) {
+      confettiAnimId = requestAnimationFrame(stepFrame);
+    } else {
+      ctx.clearRect(0, 0, confettiCanvasEl.width, confettiCanvasEl.height);
+      confettiAnimId = null;
+    }
+  }
+
+  confettiAnimId = requestAnimationFrame(stepFrame);
+}
+
+function getActiveHabits() {
+  return habits.filter(h => !h.archived);
+}
+
+function toggleArchiveHabit(id) {
+  let nowArchived = false;
+  habits = habits.map((h) => {
+    if (h.id !== id) return h;
+    nowArchived = !h.archived;
+    return { ...h, archived: nowArchived };
+  });
+  playStepSound();
+  saveToStorage(nowArchived ? '📦 Habit paused' : '↩ Habit resumed');
+  renderHabits();
+}
+
+function renderArchivedHabits() {
+  if (!archivedHabitsListEl || !archivedCountEl) return;
+  const archivedList = habits.filter(h => h.archived);
+  archivedCountEl.textContent = String(archivedList.length);
+  archivedHabitsListEl.innerHTML = '';
+
+  if (archivedList.length === 0) {
+    archivedEmptyMsgEl.classList.remove('hidden');
+    return;
+  }
+  archivedEmptyMsgEl.classList.add('hidden');
+
+  archivedList.forEach((habit) => {
+    const li = document.createElement('li');
+    li.className = 'p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2';
+
+    const info = document.createElement('div');
+    info.className = 'min-w-0 flex-1';
+    info.innerHTML = `<div class="text-xs font-bold text-slate-700 dark:text-slate-200 break-words">${habit.name}</div><div class="text-[10px] text-slate-400 mt-0.5">${habit.category} • 🔥 ${computeStreak(habit)}d streak preserved</div>`;
+
+    const resumeBtn = document.createElement('button');
+    resumeBtn.type = 'button';
+    resumeBtn.className = 'px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors shrink-0';
+    resumeBtn.textContent = '↩ Resume';
+    resumeBtn.addEventListener('click', () => toggleArchiveHabit(habit.id));
+
+    li.appendChild(info);
+    li.appendChild(resumeBtn);
+    archivedHabitsListEl.appendChild(li);
+  });
 }
 
 // 6. POMODORO / FOCUS TIMER LOGIC
@@ -758,6 +874,7 @@ function updateDateDisplay() {
 function getVisibleHabits() {
   const query = searchQuery.trim().toLowerCase();
   const filtered = habits.filter((h) => {
+    if (h.archived) return false;
     const matchesCategory = activeCategory === 'All' || h.category === activeCategory;
     const matchesTime = activeTimeSlot === 'All' || h.timeOfDay === activeTimeSlot;
     const matchesSearch =
@@ -792,9 +909,10 @@ function renderTimeTabs() {
   const buttons = timeFiltersEl.querySelectorAll('.time-tab');
   buttons.forEach((btn) => {
     const slot = btn.dataset.time;
+    const activeList = getActiveHabits();
     const count = slot === 'All'
-      ? habits.length
-      : habits.filter(h => h.timeOfDay === slot).length;
+      ? activeList.length
+      : activeList.filter(h => h.timeOfDay === slot).length;
     const base = slot === 'All' ? 'All Times' : TIME_SLOTS[slot].label;
     btn.textContent = `${base} (${count})`;
     if (slot === activeTimeSlot) {
@@ -851,9 +969,10 @@ function renderCategoryTabs() {
   const buttons = categoryFiltersEl.querySelectorAll('.filter-tab');
   buttons.forEach((btn) => {
     const cat = btn.dataset.category;
+    const activeList = getActiveHabits();
     const count = cat === 'All'
-      ? habits.length
-      : habits.filter(h => h.category === cat).length;
+      ? activeList.length
+      : activeList.filter(h => h.category === cat).length;
 
     const baseLabel = cat === 'All' ? 'All' : btn.textContent.split(' (')[0];
     btn.textContent = `${baseLabel} (${count})`;
@@ -1258,9 +1377,20 @@ function renderHabits() {
       deleteHabit(habit.id);
     });
 
+    const archiveBtn = document.createElement('button');
+    archiveBtn.type = 'button';
+    archiveBtn.title = 'Pause / Archive habit without losing history';
+    archiveBtn.className = 'p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-slate-700 rounded-lg transition-colors text-xs';
+    archiveBtn.textContent = '📦';
+    archiveBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleArchiveHabit(habit.id);
+    });
+
     toolsRight.appendChild(moveUpBtn);
     toolsRight.appendChild(timerBtn);
     toolsRight.appendChild(noteBtn);
+    toolsRight.appendChild(archiveBtn);
     toolsRight.appendChild(editBtn);
     toolsRight.appendChild(deleteBtn);
 
@@ -1379,12 +1509,14 @@ function renderHabits() {
   });
 
   updateProgressAndStreaks();
+  renderArchivedHabits();
   renderAnalytics(dayLabels);
 }
 
 function updateProgressAndStreaks() {
-  const total = habits.length;
-  const completedCount = habits.filter(h => h.completed).length;
+  const activeList = getActiveHabits();
+  const total = activeList.length;
+  const completedCount = activeList.filter(h => h.completed).length;
   const percent = total === 0 ? 0 : Math.round((completedCount / total) * 100);
 
   progressTextEl.textContent = `${completedCount} of ${total} done (${percent}%)`;
@@ -1401,7 +1533,7 @@ function updateProgressAndStreaks() {
   freezeShieldsEl.textContent = `🧊 ${freezeShields}/3`;
 
   const totalPossible = total * 7;
-  const totalDone7d = habits.reduce((sum, h) => {
+  const totalDone7d = activeList.reduce((sum, h) => {
     return sum + h.history.filter(v => v === true).length + (h.completed ? 1 : 0);
   }, 0);
   const rate7d = totalPossible === 0 ? 0 : Math.round((totalDone7d / totalPossible) * 100);
@@ -1571,11 +1703,15 @@ function incrementHabitStep(id) {
     };
   });
 
-  const allDone = habits.length > 0 && habits.every(h => h.completed);
+  const activeList = getActiveHabits();
+  const allDone = activeList.length > 0 && activeList.every(h => h.completed);
   if (steppedUp) {
     playStepSound();
   } else {
     playCheckSound(reachedComplete, reachedComplete && allDone);
+    if (reachedComplete && allDone) {
+      launchConfetti();
+    }
   }
   saveToStorage();
   renderHabits();
@@ -2026,5 +2162,12 @@ if (copyReportBtn) {
       document.body.removeChild(ta);
       onCopied();
     }
+  });
+}
+
+if (testConfettiBtn) {
+  testConfettiBtn.addEventListener('click', () => {
+    playCheckSound(true, true);
+    launchConfetti();
   });
 }
