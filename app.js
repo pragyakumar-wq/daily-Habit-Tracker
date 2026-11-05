@@ -1,5 +1,12 @@
 // 1. STATE & CONSTANTS
-const STORAGE_KEY = 'beginner_habit_tracker_v13';
+const STORAGE_KEY = 'beginner_habit_tracker_v14';
+
+const MOOD_META = {
+  high: { emoji: '⚡', label: '⚡ High Energy', score: 4 },
+  good: { emoji: '🙂', label: '🙂 Good', score: 3 },
+  calm: { emoji: '🌿', label: '🌿 Calm', score: 3 },
+  low:  { emoji: '😴', label: '😴 Low Energy', score: 1 }
+};
 
 const TIME_SLOTS = {
   Morning: { label: '🌅 Morning', order: 1, badge: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800' },
@@ -118,6 +125,8 @@ let habits = [];
 let nextId = 4;
 let dayOffset = 0;
 let freezeShields = 2;
+let todayMood = 'good';
+let moodHistory = ['good', 'high', 'good', 'low', 'calm', 'high'];
 let activeView = 'habits';
 let activeCategory = 'All';
 let activeTimeSlot = 'All';
@@ -176,6 +185,11 @@ const reviewTopHabitEl = document.getElementById('review-top-habit');
 const reviewFocusHabitEl = document.getElementById('review-focus-habit');
 const weeklyReportPreviewEl = document.getElementById('weekly-report-preview');
 const copyReportBtn = document.getElementById('copy-report-btn');
+const moodStatusLabelEl = document.getElementById('mood-status-label');
+const moodButtonsEl = document.getElementById('mood-buttons');
+const emojiPickerBarEl = document.getElementById('emoji-picker-bar');
+const moodWeekStripEl = document.getElementById('mood-week-strip');
+const moodCorrelationSummaryEl = document.getElementById('mood-correlation-summary');
 const confettiCanvasEl = document.getElementById('confetti-canvas');
 const testConfettiBtn = document.getElementById('test-confetti-btn');
 const archivedCountEl = document.getElementById('archived-count');
@@ -365,8 +379,8 @@ function loadFromStorage() {
     }
     const raw =
       localStorage.getItem(STORAGE_KEY) ||
-      localStorage.getItem('beginner_habit_tracker_v12') ||
-      localStorage.getItem('beginner_habit_tracker_v11');
+      localStorage.getItem('beginner_habit_tracker_v13') ||
+      localStorage.getItem('beginner_habit_tracker_v12');
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed.habits)) {
@@ -374,6 +388,8 @@ function loadFromStorage() {
         nextId = parsed.nextId || (habits.reduce((max, h) => Math.max(max, h.id), 0) + 1);
         dayOffset = parsed.dayOffset || 0;
         freezeShields = typeof parsed.freezeShields === 'number' ? parsed.freezeShields : 2;
+        todayMood = MOOD_META[parsed.todayMood] ? parsed.todayMood : 'good';
+        moodHistory = Array.isArray(parsed.moodHistory) && parsed.moodHistory.length === 6 ? parsed.moodHistory : ['good', 'high', 'good', 'low', 'calm', 'high'];
         if (habits.length > 0 && !habits.some(h => h.id === timerHabitId)) {
           timerHabitId = habits[0].id;
         }
@@ -393,7 +409,7 @@ function saveToStorage(message = '✓ Saved') {
   try {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ habits, nextId, dayOffset, freezeShields })
+      JSON.stringify({ habits, nextId, dayOffset, freezeShields, todayMood, moodHistory })
     );
   } catch (err) {
     // Ignore storage errors
@@ -965,6 +981,71 @@ function buildWeeklyReportText() {
   return report;
 }
 
+
+function renderMoodBar() {
+  if (!moodButtonsEl || !moodStatusLabelEl) return;
+  const info = MOOD_META[todayMood] || MOOD_META.good;
+  moodStatusLabelEl.textContent = info.label;
+
+  const btns = moodButtonsEl.querySelectorAll('.mood-btn');
+  btns.forEach((btn) => {
+    const key = btn.dataset.mood;
+    if (key === todayMood) {
+      btn.className = 'mood-btn accent-bg px-2.5 py-1 rounded-lg text-xs font-bold text-white shadow-xs transition-all';
+    } else {
+      btn.className = 'mood-btn px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all';
+    }
+  });
+}
+
+function renderMoodCorrelation(dayLabels) {
+  if (!moodWeekStripEl || !moodCorrelationSummaryEl) return;
+  moodWeekStripEl.innerHTML = '';
+  const activeList = getActiveHabits();
+  const totalHabits = activeList.length;
+
+  let highGoodPctSum = 0;
+  let highGoodCount = 0;
+  let lowPctSum = 0;
+  let lowCount = 0;
+
+  dayLabels.forEach((dayInfo, idx) => {
+    const moodKey = dayInfo.isToday ? todayMood : (moodHistory[idx] || 'good');
+    const meta = MOOD_META[moodKey] || MOOD_META.good;
+    const completedOnDay = activeList.reduce((acc, h) => {
+      const done = dayInfo.isToday ? h.completed : h.history[idx] === true;
+      return acc + (done ? 1 : 0);
+    }, 0);
+    const pct = totalHabits === 0 ? 0 : Math.round((completedOnDay / totalHabits) * 100);
+
+    if (moodKey === 'low') {
+      lowPctSum += pct;
+      lowCount += 1;
+    } else {
+      highGoodPctSum += pct;
+      highGoodCount += 1;
+    }
+
+    const cell = document.createElement('div');
+    cell.className = `p-2 rounded-xl border text-center flex flex-col items-center gap-0.5 ${
+      dayInfo.isToday
+        ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700'
+        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+    }`;
+    cell.title = `${dayInfo.fullDate}: ${meta.label} (${pct}% habits done)`;
+    cell.innerHTML = `<span class="text-sm">${meta.emoji}</span><span class="text-[10px] font-bold text-slate-700 dark:text-slate-200">${pct}%</span><span class="text-[9px] font-semibold text-slate-400">${dayInfo.isToday ? 'Today' : dayInfo.short}</span>`;
+    moodWeekStripEl.appendChild(cell);
+  });
+
+  const avgHigh = highGoodCount > 0 ? Math.round(highGoodPctSum / highGoodCount) : 0;
+  const avgLow = lowCount > 0 ? Math.round(lowPctSum / lowCount) : null;
+  if (avgLow !== null) {
+    moodCorrelationSummaryEl.textContent = `⚡/🙂 days avg ${avgHigh}% vs. 😴 days ${avgLow}%`;
+  } else {
+    moodCorrelationSummaryEl.textContent = `Avg completion on positive energy days: ${avgHigh}%`;
+  }
+}
+
 function renderCategoryTabs() {
   const buttons = categoryFiltersEl.querySelectorAll('.filter-tab');
   buttons.forEach((btn) => {
@@ -1100,11 +1181,13 @@ function renderAnalytics(dayLabels) {
   });
 
   renderMonthlyHeatmap();
+  renderMoodCorrelation(dayLabels);
   buildWeeklyReportText();
 }
 
 function renderHabits() {
   updateDateDisplay();
+  renderMoodBar();
   renderTimeTabs();
   renderCategoryTabs();
   renderTimerUI();
@@ -1958,6 +2041,7 @@ importFileInput.addEventListener('change', (event) => {
 
 advanceDayBtn.addEventListener('click', () => {
   dayOffset += 1;
+  moodHistory = [...moodHistory.slice(1), todayMood];
   const allCompletedToday = habits.length > 0 && habits.every(h => h.completed);
   let shieldsUsed = 0;
 
@@ -2169,5 +2253,31 @@ if (testConfettiBtn) {
   testConfettiBtn.addEventListener('click', () => {
     playCheckSound(true, true);
     launchConfetti();
+  });
+}
+
+
+if (moodButtonsEl) {
+  moodButtonsEl.addEventListener('click', (event) => {
+    const btn = event.target.closest('.mood-btn');
+    if (!btn) return;
+    todayMood = btn.dataset.mood;
+    playStepSound();
+    saveToStorage(`✓ Logged mood: ${MOOD_META[todayMood].emoji}`);
+    renderHabits();
+  });
+}
+
+if (emojiPickerBarEl) {
+  emojiPickerBarEl.addEventListener('click', (event) => {
+    const btn = event.target.closest('.emoji-pick-btn');
+    if (!btn) return;
+    const emoji = btn.dataset.emoji;
+    const current = habitInput.value.trim();
+    // Replace leading emoji if already present, or prepend emoji
+    const cleaned = current.replace(/^[💧📖💻🏃🧘🥗🎯😴]\s*/, '');
+    habitInput.value = cleaned ? `${emoji} ${cleaned}` : `${emoji} `;
+    habitInput.focus();
+    playStepSound();
   });
 }
