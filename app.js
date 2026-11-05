@@ -971,8 +971,9 @@ function renderHabits() {
       habitListEl.querySelectorAll('.habit-item').forEach(el => el.classList.remove('drag-over'));
     });
 
+    // ROW 1: Drag Handle + Checkbox + Full-Width Habit Name + Streak Pill
     const topRow = document.createElement('div');
-    topRow.className = 'flex items-center justify-between gap-2 cursor-pointer';
+    topRow.className = 'flex items-start justify-between gap-2.5 cursor-pointer';
     topRow.addEventListener('click', () => {
       if (editingHabitId !== habit.id) {
         incrementHabitStep(habit.id);
@@ -980,16 +981,15 @@ function renderHabits() {
     });
 
     const leftDiv = document.createElement('div');
-    leftDiv.className = 'flex items-center gap-2.5 min-w-0 flex-1';
+    leftDiv.className = 'flex items-start gap-2.5 min-w-0 flex-1';
 
-    // Drag Handle (`⋮⋮`)
     const dragHandle = document.createElement('span');
     dragHandle.title = 'Drag to reorder habit';
-    dragHandle.className = 'text-slate-300 dark:text-slate-600 hover:text-slate-500 cursor-grab active:cursor-grabbing text-xs font-bold select-none shrink-0';
+    dragHandle.className = 'mt-0.5 text-slate-300 dark:text-slate-600 hover:text-slate-500 cursor-grab active:cursor-grabbing text-xs font-bold select-none shrink-0';
     dragHandle.textContent = '⋮⋮';
 
     const checkbox = document.createElement('div');
-    checkbox.className = `w-5 h-5 rounded-full flex items-center justify-center border transition-colors shrink-0 ${
+    checkbox.className = `mt-0.5 w-5 h-5 rounded-full flex items-center justify-center border transition-colors shrink-0 ${
       habit.completed
         ? 'bg-emerald-500 border-emerald-500 text-white'
         : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900'
@@ -999,14 +999,14 @@ function renderHabits() {
       : '';
 
     const titleWrap = document.createElement('div');
-    titleWrap.className = 'flex items-center gap-2 min-w-0 flex-1 flex-wrap';
+    titleWrap.className = 'flex items-center gap-1.5 min-w-0 flex-1';
 
     if (editingHabitId === habit.id) {
       const editInput = document.createElement('input');
       editInput.type = 'text';
       editInput.value = habit.name;
       editInput.maxLength = 60;
-      editInput.className = 'px-2 py-1 text-sm rounded-lg border border-indigo-400 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-1 min-w-[140px]';
+      editInput.className = 'px-2.5 py-1 text-sm rounded-lg border border-indigo-400 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full';
       editInput.addEventListener('click', (e) => e.stopPropagation());
       editInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -1023,42 +1023,58 @@ function renderHabits() {
       setTimeout(() => editInput.focus(), 0);
     } else {
       const shortcutBadge = document.createElement('kbd');
-      shortcutBadge.className = 'hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-400 border border-slate-200 dark:border-slate-600';
+      shortcutBadge.className = 'hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-400 border border-slate-200 dark:border-slate-600 shrink-0';
       shortcutBadge.textContent = String(visibleIdx + 1);
       shortcutBadge.title = `Press ${visibleIdx + 1} on your keyboard to advance`;
 
       const titleSpan = document.createElement('span');
-      titleSpan.className = `text-sm font-medium truncate ${
+      titleSpan.className = `text-sm sm:text-base font-semibold leading-snug break-words ${
         habit.completed ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-100'
       }`;
       titleSpan.textContent = habit.name;
-
-      const catBadge = document.createElement('span');
-      catBadge.className = `px-2 py-0.5 text-[10px] font-semibold rounded-md border ${catClass}`;
-      catBadge.textContent = habit.category;
 
       if (visibleIdx < 9) {
         titleWrap.appendChild(shortcutBadge);
       }
       titleWrap.appendChild(titleSpan);
-      titleWrap.appendChild(catBadge);
     }
 
     leftDiv.appendChild(dragHandle);
     leftDiv.appendChild(checkbox);
     leftDiv.appendChild(titleWrap);
 
-    const rightDiv = document.createElement('div');
-    rightDiv.className = 'flex items-center gap-1 shrink-0';
+    const streakBadge = document.createElement('span');
+    streakBadge.className = `inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold shrink-0 ${
+      activeStreak > 0
+        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300'
+        : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+    }`;
+    streakBadge.textContent = `🔥 ${activeStreak}d`;
+
+    topRow.appendChild(leftDiv);
+    topRow.appendChild(streakBadge);
+    li.appendChild(topRow);
+
+    // ROW 2: Category Badge + Multi-Step Counter (Left) & Action Toolbar (Right)
+    const actionRow = document.createElement('div');
+    actionRow.className = 'mt-2.5 pl-7 flex flex-wrap items-center justify-between gap-2';
+
+    const metaLeft = document.createElement('div');
+    metaLeft.className = 'flex items-center gap-2 flex-wrap';
+
+    const catBadge = document.createElement('span');
+    catBadge.className = `px-2 py-0.5 text-[11px] font-semibold rounded-md border ${catClass}`;
+    catBadge.textContent = habit.category;
+    metaLeft.appendChild(catBadge);
 
     if (habit.target > 1) {
       const stepper = document.createElement('div');
-      stepper.className = 'inline-flex items-center bg-slate-100 dark:bg-slate-700/80 rounded-lg p-0.5 mr-1';
+      stepper.className = 'inline-flex items-center bg-slate-100 dark:bg-slate-700/80 rounded-lg p-0.5';
 
       const minusBtn = document.createElement('button');
       minusBtn.type = 'button';
       minusBtn.title = 'Decrease count';
-      minusBtn.className = 'w-5 h-5 rounded text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-600 transition-colors';
+      minusBtn.className = 'w-6 h-6 rounded text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-600 transition-colors';
       minusBtn.textContent = '−';
       minusBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1066,13 +1082,13 @@ function renderHabits() {
       });
 
       const countText = document.createElement('span');
-      countText.className = 'px-1.5 text-[11px] font-bold text-indigo-600 dark:text-indigo-300';
+      countText.className = 'px-2 text-xs font-bold text-indigo-600 dark:text-indigo-300';
       countText.textContent = `${habit.count}/${habit.target}`;
 
       const plusBtn = document.createElement('button');
       plusBtn.type = 'button';
       plusBtn.title = 'Increase count';
-      plusBtn.className = 'w-5 h-5 rounded text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-600 transition-colors';
+      plusBtn.className = 'w-6 h-6 rounded text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-600 transition-colors';
       plusBtn.textContent = '+';
       plusBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1082,22 +1098,16 @@ function renderHabits() {
       stepper.appendChild(minusBtn);
       stepper.appendChild(countText);
       stepper.appendChild(plusBtn);
-      rightDiv.appendChild(stepper);
+      metaLeft.appendChild(stepper);
     }
 
-    const streakBadge = document.createElement('span');
-    streakBadge.className = `inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-      activeStreak > 0
-        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300'
-        : 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-400'
-    }`;
-    streakBadge.textContent = `🔥 ${activeStreak}d`;
+    const toolsRight = document.createElement('div');
+    toolsRight.className = 'flex items-center gap-1 ml-auto';
 
-    // Touch / Keyboard Accessible Move Up Button (`↑`)
     const moveUpBtn = document.createElement('button');
     moveUpBtn.type = 'button';
     moveUpBtn.title = 'Move habit up';
-    moveUpBtn.className = 'p-1 text-slate-400 hover:text-indigo-500 rounded transition-colors text-xs';
+    moveUpBtn.className = 'p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-xs';
     moveUpBtn.textContent = '↑';
     moveUpBtn.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -1154,16 +1164,15 @@ function renderHabits() {
       deleteHabit(habit.id);
     });
 
-    rightDiv.appendChild(streakBadge);
-    rightDiv.appendChild(moveUpBtn);
-    rightDiv.appendChild(timerBtn);
-    rightDiv.appendChild(noteBtn);
-    rightDiv.appendChild(editBtn);
-    rightDiv.appendChild(deleteBtn);
+    toolsRight.appendChild(moveUpBtn);
+    toolsRight.appendChild(timerBtn);
+    toolsRight.appendChild(noteBtn);
+    toolsRight.appendChild(editBtn);
+    toolsRight.appendChild(deleteBtn);
 
-    topRow.appendChild(leftDiv);
-    topRow.appendChild(rightDiv);
-    li.appendChild(topRow);
+    actionRow.appendChild(metaLeft);
+    actionRow.appendChild(toolsRight);
+    li.appendChild(actionRow);
 
     if (openNoteHabitId === habit.id) {
       const noteBox = document.createElement('div');
@@ -1223,14 +1232,14 @@ function renderHabits() {
     }
 
     const weekRow = document.createElement('div');
-    weekRow.className = 'mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-700/70 flex items-center justify-between gap-2';
+    weekRow.className = 'mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-700/70 flex flex-col gap-1.5';
 
-    const weekLabel = document.createElement('span');
-    weekLabel.className = 'text-[11px] font-medium text-slate-400 dark:text-slate-500';
-    weekLabel.textContent = 'Drag ⋮⋮ to reorder • Click day to toggle ✓ / 🧊 / ×:';
+    const weekHeader = document.createElement('div');
+    weekHeader.className = 'flex items-center justify-between text-[11px] font-medium text-slate-400 dark:text-slate-500';
+    weekHeader.innerHTML = '<span>Last 7 days</span><span>Tap day: ✓ / 🧊 / ×</span>';
 
     const dotsContainer = document.createElement('div');
-    dotsContainer.className = 'flex items-center gap-1.5';
+    dotsContainer.className = 'grid grid-cols-7 gap-1.5 w-full';
 
     dayLabels.forEach((dayInfo, idx) => {
       const status = dayInfo.isToday ? habit.completed : habit.history[idx];
@@ -1238,7 +1247,7 @@ function renderHabits() {
       dayBtn.type = 'button';
 
       let statusLabel = 'Missed';
-      let colorStyle = 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600';
+      let colorStyle = 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600';
       let buttonText = dayInfo.short;
 
       if (status === true) {
@@ -1251,7 +1260,7 @@ function renderHabits() {
       }
 
       dayBtn.title = `${dayInfo.fullDate}: ${statusLabel}`;
-      dayBtn.className = `w-6 h-6 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all ${colorStyle} ${
+      dayBtn.className = `h-8 w-full rounded-lg text-xs font-bold flex items-center justify-center transition-all ${colorStyle} ${
         dayInfo.isToday ? 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-800' : ''
       }`;
       dayBtn.textContent = buttonText;
@@ -1268,7 +1277,7 @@ function renderHabits() {
       dotsContainer.appendChild(dayBtn);
     });
 
-    weekRow.appendChild(weekLabel);
+    weekRow.appendChild(weekHeader);
     weekRow.appendChild(dotsContainer);
 
     li.appendChild(weekRow);

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habit-tracker-pwa-v12';
+const CACHE_NAME = 'habit-tracker-pwa-v13';
 const ASSETS = [
   './',
   './index.html',
